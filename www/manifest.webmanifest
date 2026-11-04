@@ -1,0 +1,17 @@
+{
+  "name": "Five Stars 每日作战",
+  "short_name": "每日作战",
+  "description": "Five Stars Share 顾问每日积分、ABC 初恋表格、晚间复盘",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#262B55",
+  "theme_color": "#262B55",
+  "lang": "zh-Hans",
+  "icons": [
+    {"src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png"},
+    {"src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png"},
+    {"src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}
