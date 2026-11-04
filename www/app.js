@@ -179,15 +179,41 @@ function notices(){
   if(S.readonly)h+='<div class="notice">你的账号目前不能保存，请联系 leader。</div>';
   return h;
 }
+function checklistHtml(day){
+  const it=day.items||[]; const has=t=>it.some(i=>i.t===t);
+  const signed=has('sign'); const after=iso(addDays(new Date(),2));
+  const talked=it.some(i=>i.t!=='C')||(day.talks||[]).length>0;
+  const booked=active().some(x=>x.nextDate===after);
+  const L=[
+    {k:'wake',l:'闹钟响就起床，打开 app 看今天主题'},
+    {k:'posted',l:'在社交媒体 post 至少 1 则'},
+    {k:'focus',l:'做完今天的主要 3 小时：'+THEMES[new Date().getDay()].t},
+    {a:has('A')||signed,l:'联络 A 的人，推进到签单',h:'按「找 A」或「签单」'},
+    {a:has('B'),l:'和 B 的人聊天、做服务',h:'按「找 B」'},
+    {a:has('C'),l:'拿到新 C 的联络方式',h:'按「新 C」'},
+    {a:!!day.refilled,l:'签了单就立刻从 B 补一位到 A',h:'签单后从 B 升一位到 A',na:!signed},
+    {a:talked,l:'晚上记录今天谈过保险的人',h:'在「晚间」记录'},
+    {a:booked,l:'预约好后天的 appointment',h:'在「晚间」约后天'},
+    {a:score(day)>=GOAL,l:'今日积分满 20 分，放工',h:'还差 '+Math.max(GOAL-score(day),0)+' 分'}
+  ];
+  const rows=L.filter(x=>!x.na);
+  const done=rows.filter(x=>x.k?day[x.k]:x.a).length;
+  const html=L.map(x=>{
+    if(x.k)return '<button class="chk'+(day[x.k]?' on':'')+'" data-act="toggle" data-k="'+x.k+'" aria-pressed="'+(!!day[x.k])+'"><span class="box"></span><span>'+x.l+'</span></button>';
+    if(x.na)return '<div class="chk auto na"><span class="box"></span><span>'+x.l+'<small>今天有签单才需要</small></span></div>';
+    return '<div class="chk auto'+(x.a?' on':'')+'"><span class="box"></span><span>'+x.l+(x.a?'':'<small>'+x.h+'</small>')+'</span></div>';
+  }).join('');
+  return {html,done,total:rows.length};
+}
 function viewToday(){
   const day=getDay(TODAY), sc=score(day), left=Math.max(GOAL-sc,0), c=counts();
   const items=(day.items||[]).slice().reverse();
+  const cl=checklistHtml(day);
   const tm=iso(addDays(new Date(),1));
   const appts=active().filter(x=>x.nextDate===TODAY||x.nextDate===tm).sort((a,b)=>(a.nextDate+(a.nextTime||'')).localeCompare(b.nextDate+(b.nextTime||'')));
   const meter=(k,v,t)=>{const low=t&&v<t;return '<button class="meter'+(low?' low':'')+'" data-act="goList" data-tier="'+k+'"><span class="lab">'+k+' 名单</span><span class="v">'+v+(t?'<small>/'+t+'</small>':'')+'</span>'+(t?'<span class="bar"><i style="width:'+Math.min(100,v/t*100)+'%;background:var(--t'+k+')"></i></span>':'<span class="lab">源源不绝</span>')+'</button>';};
   const team=Object.values(S.board).filter(b=>b.date===TODAY).sort((a,b)=>b.score-a.score);
-  const chk=(k,label)=>'<button class="chk'+(day[k]?' on':'')+'" data-act="toggle" data-k="'+k+'" aria-pressed="'+(!!day[k])+'"><span class="box"></span><span>'+label+'</span></button>';
-  return notices()+
+    return notices()+
   '<section class="panel"><div class="score">'+ringSvg(sc)+'<div style="display:grid;gap:10px">'+
     (sc>=GOAL?'<div class="status ok">今天达标，可以放工！</div>':'<div class="status">还差 <span class="num" style="font-size:22px">'+left+'</span> 分放工</div>')+
     '<div class="btns">'+
@@ -196,9 +222,7 @@ function viewToday(){
       '<button class="sbtn" data-act="score" data-t="B"><b>找 B<span class="sub">聊天 / 做服务</span></b><span class="pt" style="color:var(--tB)">+3</span></button>'+
       '<button class="sbtn" data-act="score" data-t="C"><b>新 C<span class="sub">拿到联络方式</span></b><span class="pt" style="color:var(--tC)">+2</span></button>'+
     '</div></div></div></section>'+
-  '<section class="panel"><h2>今天的功课</h2><div class="checks">'+
-    chk('focus','主要 3 小时：'+THEMES[new Date().getDay()].t)+chk('posted','在 FB / IG / 小红书 post 一则')+chk('review','晚上复盘、预约后天 appointment')+
-  '</div></section>'+
+  '<section class="panel"><h2>每日检查清单 <small>'+cl.done+' / '+cl.total+' 完成</small></h2><div class="checks">'+cl.html+'</div><div class="small muted">有灰色说明的项目，做到后会自动打勾。</div></section>'+
   '<section class="panel"><h2>今日得分 <small>'+items.length+' 项</small></h2><div class="rows">'+
     (items.length?items.map(i=>'<div class="row"><span class="tag '+i.t+'">'+TLAB[i.t]+'</span><div class="grow"><b>'+esc(i.name)+'</b><div class="small muted">'+esc(i.at)+(i.note?' · '+esc(i.note):'')+'</div></div><span class="pts">+'+i.pts+'</span><button class="x" data-act="rmItem" data-id="'+esc(i.id)+'" aria-label="删除这项">×</button></div>').join(''):'<div class="empty">还没有得分。按上面的按钮，每做到一项就记一项。</div>')+
   '</div></section>'+
@@ -294,6 +318,56 @@ function viewMe(){
   '</section>'+
   (CLOUD?'<section class="panel"><h2>账号</h2><div class="small muted">'+esc(S.email)+'</div><button class="btn block" data-act="logout">登出</button></section>':'');
 }
+const GOPEN=new Set(['who']);
+document.addEventListener('toggle',e=>{const d=e.target;if(d&&d.dataset&&d.dataset.g){if(d.open)GOPEN.add(d.dataset.g);else GOPEN.delete(d.dataset.g);}},true);
+function viewGuide(){
+  const T=(h)=>'<div class="tblw"><table class="gt">'+h+'</table></div>';
+  const sec=(id,title,body)=>'<details class="g"'+(GOPEN.has(id)?' open':'')+' id="g-'+id+'" data-g="'+id+'"><summary>'+title+'</summary><div class="gb">'+body+'</div></details>';
+  const wd=new Date().getDay();
+  const weekRows=[[1,'星期一','Follow up day','Follow up 上星期联系的朋友'],[2,'星期二','Open market day','陌生市场 / Road Show / 陌生拜访'],[3,'星期三','转介绍日','原有市场拿转介绍（至少 3 个）'],[4,'星期四','学习日','Case study / Role play / 签单分享 / 晚会 Zoom'],[5,'星期五','增员日','陌生增员，至少拿 2 个联络'],[6,'星期六','预约日','电话预约下星期的 appointment / 整理 name list ABC'],[0,'星期日','自由安排','休息、陪家人']]
+    .map(r=>'<tr'+(r[0]===wd?' class="now"':'')+'><td>'+r[1]+(r[0]===wd?' <b class="today-tag">今天</b>':'')+'</td><td><b>'+r[2]+'</b></td><td>'+r[3]+'</td></tr>').join('');
+  return '<section class="panel"><h2>Five Stars 资深顾问作战手册</h2>'+
+  '<div class="small muted">每天拿满 20 分才放工，用初恋表格（ABC 名单）把客源一直滚下去。点标题展开。</div>'+
+  sec('who','一、这本手册给谁用',
+    '<p>给做保险超过两年的 Five Stars 顾问。</p><ul>'+
+    '<li><b>核心心法：卖自己，不要卖产品。</b>让初恋表格里的每一个人天天看见你，曝光率就是成交率。</li>'+
+    '<li><b>配合 app 使用：</b>目标、积分、名单、今日记录都在 app 里，leader 每天看得到全组进度。</li>'+
+    '<li><b>一天工作 8 小时：</b>主要 3 小时做当天的主题工作，其余 5 小时做 Appointment → Close case → Paper work → Take report → Post IG/FB → 扩大自己人脉。</li></ul>',true)+
+  sec('day','二、每日作息',
+    '<p>每天在同一个时间起床：在「我的」设定起床时间，手机每天准时提醒。以下是建议时间表，可按自己情况微调。</p>'+
+    T('<tr><th>时间</th><th>要做什么</th></tr><tr><td>7:00</td><td>起床；打开 app 看今天的主题和积分目标</td></tr><tr><td>8:00</td><td>在社交媒体 post 一则保险生活化内容</td></tr><tr><td>9:00 – 12:00</td><td><b>主要 3 小时</b>：做当天的主题</td></tr><tr><td>12:00 – 18:00</td><td>其余 5 小时：见顾客谈保单、签单、Paper work、交 report、参加活动认识新朋友</td></tr><tr><td>晚上</td><td>复盘：记录今天谈过保险的人，从名单预约后天的 appointment</td></tr><tr><td>放工</td><td>今日积分满 20 分</td></tr>'))+
+  sec('week','三、每周工作日常（主要每日 3 小时）',
+    T('<tr><th>星期</th><th>主题</th><th>具体要做</th></tr>'+weekRows)+
+    '<p class="small muted">其余 5 小时的循环：Appointment → Close case → Paper work → Take report → Post IG/FB → 扩大自己人脉。</p>')+
+  sec('abc','四、初恋表格：ABC 名单',
+    '<p>名单永远保持 <b>A 10 位、B 至少 30 位、C 源源不绝</b>；A 签了一位，就立刻从 B 提一位上来补位。</p>'+
+    T('<tr><th>等级</th><th>数量</th><th>是谁</th><th>你要做什么</th></tr>'+
+      '<tr><td><span class="tag A">A</span></td><td>固定 10 位</td><td>可以直接谈保单的人</td><td>经常出现、不断联络，直到签单</td></tr>'+
+      '<tr><td><span class="tag B">B</span></td><td>至少 30 位</td><td>认识、有关系，但还没进到讲保险</td><td>做信任、做服务；有时间就聊天，多分享保险知识，把他们带到 A</td></tr>'+
+      '<tr><td><span class="tag C">C</span></td><td>源源不绝</td><td>新认识的人</td><td>从活动、转介绍、社交媒体、小红书认识，拿到联络方式（IG、FB、电话号都算）</td></tr>')+
+    '<p><b>三条规矩：</b></p><ol><li><b>A 签单 → 立刻补位。</b>在 app 按「签单」，app 会提醒你从 B 选一位升到 A。</li><li><b>B 少于 30 位 → 从 C 升。</b>聊过几次、关系建立的 C，就升到 B。</li><li><b>C 不能断。</b>每天至少拿到新的联络方式，名单才不会干。</li></ol>'+
+    '<button class="btn block" data-act="goList" data-tier="A">打开我的初恋表格</button>')+
+  sec('score','五、每日积分：满 20 分才放工',
+    '<p>每天给自己打分，拿满 20 分才算放工；每做到一项，就在「今天」按一下。</p>'+
+    T('<tr><th>做到什么</th><th>分数</th></tr><tr><td>签单 1 份</td><td><b>10 分</b></td></tr><tr><td>找 A 的人 1 位（见面或谈保单）</td><td><b>5 分</b></td></tr><tr><td>找 B 的人 1 位（聊天、做服务、分享保险知识）</td><td><b>3 分</b></td></tr><tr><td>新 C 拿到联络方式 1 位（IG、FB、电话号都算）</td><td><b>2 分</b></td></tr>')+
+    '<p><b>拿到 20 分的几种组合：</b></p><ul><li>签 2 份单 = 20 分</li><li>签 1 份 + 找 2 位 A = 20 分</li><li>找 2 位 A + 2 位 B + 2 位新 C = 20 分</li><li>找 4 位 B + 4 位新 C = 20 分</li></ul>'+
+    '<p class="small muted">同一位顾客一天只算一次；leader 看得到每一分是和谁拿的。</p>')+
+  sec('social','六、社交媒体曝光：每天至少 1 则',
+    '<p>每天在 FB、IG 或小红书 post 至少 1 则，让初恋表格里的人天天看见你：卖自己，不要卖产品。可以轮流 post 这五类：</p>'+
+    '<ol><li><b>保险生活化</b>：生活里的小事和保障的关系，例如陪家人体检、旅行前的准备。</li><li><b>做服务</b>：帮顾客办理赔款、送保单、探病的照片（先问顾客可不可以拍，不露出他们的个人资料）。</li><li><b>保险咨询</b>：一个常见问题配一句简单的解答。</li><li><b>自己的工作日常</b>：上课、Road Show、团队活动，让人看见你很认真。</li><li><b>个人生活</b>：家庭、运动、爱好，让人认识你这个人。</li></ol>'+
+    '<p class="small muted">社交媒体上认识的新朋友，拿到联络方式就放进 C，算 2 分。post 完在清单勾「post 至少 1 则」。</p>')+
+  sec('night','七、晚间复盘：15 分钟',
+    '<p>每晚花 15 分钟做两件事：记下今天和谁开过保险话题，再从名单里预约后天的 appointment。</p>'+
+    '<ol><li><b>记录今天谈过保险的人</b>：在「晚间」写下顾客名字、谈了什么、下一步。白天按积分时已经记的，只要补充备注。</li><li><b>预约后天的 appointment</b>：从 A 和 B 里挑人打电话或 WhatsApp，约好就填「下次见面」日期。</li><li><b>看一眼名单数量</b>：A 少于 10 位、B 少于 30 位，app 会变红提醒，明天要优先补。</li></ol>'+
+    '<button class="btn block" data-act="tab" data-tab="evening">去晚间复盘</button>')+
+  sec('app','八、App 怎么用',
+    T('<tr><th>页面</th><th>在这里做什么</th></tr><tr><td>今天</td><td>看今天的主题和积分圈；按「签单 / 找 A / 找 B / 新 C」记分；每日检查清单；今明两天的约；全组排名</td></tr><tr><td>名单</td><td>初恋表格 A / B / C / 已签单；加人、升级、降级、签单</td></tr><tr><td>晚间</td><td>记录今天谈过保险的人；预约后天；复盘完成</td></tr><tr><td>手册</td><td>就是这一页</td></tr><tr><td>我的</td><td>名字、目标、起床和复盘时间、提醒；最近 14 天积分</td></tr><tr><td>团队</td><td>只有 leader 看得到：全组进度，点一位顾问看详情</td></tr>')+
+    '<p><b>第一次使用：</b>先到「我的」填名字和目标、设定提醒，再到「名单」把现有的 A 10 位、B 30 位输入进去，第二天开始每做到一项就记分。</p>')+
+  sec('check','九、每日检查清单',
+    '<p>「今天」页面的清单就是这 10 项，做到的会自动打勾：</p><ol><li>闹钟响就起床，打开 app 看今天主题</li><li>在社交媒体 post 至少 1 则</li><li>做完今天的主要 3 小时</li><li>联络 A 的人，推进到签单</li><li>和 B 的人聊天、做服务</li><li>拿到新 C 的联络方式</li><li>签了单就立刻从 B 补一位到 A</li><li>晚上记录今天谈过保险的人</li><li>预约好后天的 appointment</li><li>今日积分满 20 分，放工</li></ol>'+
+    '<button class="btn pri block" data-act="tab" data-tab="today">去今天的清单</button>')+
+  '</section>';
+}
 function viewTeam(){
   if(!S.leader)return viewToday();
   const rows=Object.values(S.board).sort((a,b)=>((b.date===TODAY?b.score:0)-(a.date===TODAY?a.score:0)));
@@ -344,13 +418,14 @@ const ICON={
   list:'<svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01" stroke-width="2.6"/></svg>',
   evening:'<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>',
   me:'<svg viewBox="0 0 24 24"><path d="M12 3l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.4 6.8 19.2l1-5.9L3.5 9.2l5.9-.8z"/></svg>',
+  guide:'<svg viewBox="0 0 24 24"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5z"/><path d="M20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z"/></svg>',
   team:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9.5" r="2.5"/><path d="M15.5 14.3c2.4.2 4.3 1.8 4.9 4.7"/></svg>'
 };
 function renderTabs(){
   const bar=$('#tabbar');
   if(!S.signedIn){bar.hidden=true;return;}
   bar.hidden=false;
-  const tabs=[['today','今天'],['list','名单'],['evening','晚间'],['me','我的']]; if(S.leader)tabs.push(['team','团队']);
+  const tabs=[['today','今天'],['list','名单'],['evening','晚间'],['guide','手册'],['me','我的']]; if(S.leader)tabs.push(['team','团队']);
   $('#tabs').innerHTML=tabs.map(([k,l])=>'<button class="'+(S.tab===k?'on':'')+'" data-act="tab" data-tab="'+k+'" aria-current="'+(S.tab===k?'page':'false')+'">'+ICON[k]+l+'</button>').join('');
 }
 function render(){
@@ -358,7 +433,7 @@ function render(){
   const ae=document.activeElement;
   if(ae&&ae.closest&&ae.closest('#view form')&&ae.tagName!=='BUTTON')return; // don't wipe a form being typed in
   if(!S.signedIn){$('#view').innerHTML=viewLogin();return;}
-  const v={today:viewToday,list:viewList,evening:viewEvening,me:viewMe,team:viewTeam}[S.tab]||viewToday;
+  const v={today:viewToday,list:viewList,evening:viewEvening,guide:viewGuide,me:viewMe,team:viewTeam}[S.tab]||viewToday;
   $('#view').innerHTML=v();
 }
 
@@ -451,8 +526,8 @@ document.addEventListener('click',e=>{
     return;
   }
   if(a==='signC'){const c=S.clients.find(x=>x.id===id);if(c)doSign(c);return;}
-  if(a==='promoteA'){const c=S.clients.find(x=>x.id===id);if(!c)return;const n=clone(c);n.tier='A';saveClient(n);closeSheet();toast(c.name+' 升到 A 了');return;}
-  if(a==='move'){const c=S.clients.find(x=>x.id===id);if(!c)return;const n=clone(c);n.tier=el.dataset.to;saveClient(n);toast(c.name+' → '+el.dataset.to);return;}
+  if(a==='promoteA'){const c=S.clients.find(x=>x.id===id);if(!c)return;const n=clone(c);n.tier='A';saveClient(n);const dd=clone(getDay(TODAY));if(!dd.refilled){dd.refilled=true;saveDay(dd);}closeSheet();toast(c.name+' 升到 A 了');return;}
+  if(a==='move'){const c=S.clients.find(x=>x.id===id);if(!c)return;const n=clone(c);n.tier=el.dataset.to;saveClient(n);if(el.dataset.to==='A'&&(getDay(TODAY).items||[]).some(i=>i.t==='sign')&&!getDay(TODAY).refilled){const dd=clone(getDay(TODAY));dd.refilled=true;saveDay(dd);}toast(c.name+' → '+el.dataset.to);return;}
   if(a==='reopen'){const c=S.clients.find(x=>x.id===id);if(!c)return;const n=clone(c);n.status='active';n.tier='A';delete n.signedAt;saveClient(n);return;}
   if(a==='book'){const c=S.clients.find(x=>x.id===id);if(!c)return;openSheet(clientForm(Object.assign(clone(c),{nextDate:iso(addDays(new Date(),2))})));return;}
   if(a==='alarm'){if(LN)scheduleNative(false);else downloadIcs();return;}
