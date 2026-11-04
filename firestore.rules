@@ -1,0 +1,32 @@
+rules_version = '2';
+// 规则：每位顾问只能读写自己的名单和记录；全组积分（board）登入的人都看得到；
+// config/leaders 里列出的 email 可以看全组顾问的名单和记录（只读）。
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isLeader() {
+      return signedIn()
+        && request.auth.token.email != null
+        && exists(/databases/$(database)/documents/config/leaders)
+        && request.auth.token.email.lower() in get(/databases/$(database)/documents/config/leaders).data.emails;
+    }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+
+    match /config/{doc} {
+      allow read: if signedIn();
+      allow write: if false;   // 只在 Firebase 控制台修改
+    }
+    match /board/{uid} {
+      allow read: if signedIn();
+      allow write: if isSelf(uid);
+    }
+    match /agents/{uid} {
+      allow read: if isSelf(uid) || isLeader();
+      allow write: if isSelf(uid);
+      match /{rest=**} {
+        allow read: if isSelf(uid) || isLeader();
+        allow write: if isSelf(uid);
+      }
+    }
+  }
+}

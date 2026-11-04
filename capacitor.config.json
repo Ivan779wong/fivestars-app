@@ -1,0 +1,9 @@
+{
+  "appId": "com.fivestarsshare.daily",
+  "appName": "每日作战",
+  "webDir": "www",
+  "android": { "backgroundColor": "#262B55" },
+  "plugins": {
+    "LocalNotifications": { "iconColor": "#D63A72" }
+  }
+}
